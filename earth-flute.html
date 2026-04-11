@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>EARTH FLUTE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0b0f;
+    --surface: rgba(20, 22, 30, 0.88);
+    --accent: #7eb8a0;
+    --accent-dim: #3d6b57;
+    --warm: #c4956a;
+    --text: #d4d0c8;
+    --text-dim: #6b6860;
+    --glow: rgba(126, 184, 160, 0.15);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  #canvas-container {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  canvas { display: block; touch-action: none; }
+
+  .top-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: linear-gradient(180deg, rgba(10,11,15,0.95) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .title-block { pointer-events: auto; }
+
+  .title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .subtitle {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    text-transform: uppercase;
+  }
+
+  .status-block {
+    text-align: right;
+    pointer-events: auto;
+  }
+
+  .status-line {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .status-line .val { color: var(--accent); }
+
+  .data-source {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    opacity: 0.5;
+    margin-top: 4px;
+  }
+
+  .instructions {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.8s;
+  }
+
+  .instructions.hidden { opacity: 0; }
+
+  .instructions p {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    line-height: 2;
+    text-transform: uppercase;
+  }
+
+  .pin-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+    pointer-events: auto;
+    background: linear-gradient(0deg, rgba(10,11,15,0.92) 0%, transparent 100%);
+  }
+
+  .pin-panel::-webkit-scrollbar { display: none; }
+
+  .pin-card {
+    background: var(--surface);
+    border: 1px solid rgba(126, 184, 160, 0.1);
+    border-radius: 5px;
+    padding: 6px 8px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: calc(25% - 3px);
+    flex-shrink: 0;
+  }
+
+  .pin-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--glow);
+  }
+
+  .pin-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+  }
+
+  .pin-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: 1px;
+  }
+
+  .pin-remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    transition: color 0.2s;
+    line-height: 1;
+  }
+
+  .pin-remove:hover { color: var(--warm); }
+
+  .pin-data {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    text-transform: uppercase;
+  }
+
+  .pin-data .val { color: var(--accent); }
+  .pin-data .note-val { color: var(--warm); font-size: 11px; font-weight: 400; }
+
+  .pin-viz {
+    margin-top: 3px;
+    height: 14px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 3px;
+    background: rgba(126, 184, 160, 0.05);
+  }
+
+  .pin-viz-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    opacity: 0.6;
+  }
+
+  .pin-viz-label {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 8px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+  }
+
+  .coord-tooltip {
+    position: fixed;
+    z-index: 150;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--accent-dim);
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .coord-tooltip.visible { opacity: 1; }
+
+  .note-flash {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 40px;
+    font-weight: 300;
+    color: var(--warm);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    letter-spacing: 6px;
+  }
+
+  .note-flash.visible { opacity: 1; }
+
+  .start-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(10, 11, 15, 0.94);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: opacity 0.6s;
+  }
+
+  .start-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .start-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 48px;
+    font-weight: 300;
+    letter-spacing: 12px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .start-sub {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .start-detail {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    opacity: 0.5;
+    margin-bottom: 32px;
+    text-align: center;
+    line-height: 2;
+  }
+
+  .start-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    background: none;
+    padding: 12px 32px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.3s;
+  }
+
+  .start-btn:hover {
+    background: var(--glow);
+    border-color: var(--accent);
+  }
+
+  .loading-indicator {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 100;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--accent-dim);
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .loading-indicator.visible { opacity: 1; }
+
+  @media (max-width: 600px) {
+    .pin-card { width: calc(25% - 3px); padding: 5px 6px; }
+    .title { font-size: 20px; letter-spacing: 4px; }
+    .start-title { font-size: 28px; letter-spacing: 6px; }
+    .status-block { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="start-overlay" id="startOverlay">
+  <div class="start-title">Earth Flute</div>
+  <div class="start-sub">Lampwrecked 2026</div>
+  <div class="start-detail">
+    Wind speed → volume<br>
+    Wind direction → pitch (pentatonic)<br>
+    Live data from Open-Meteo
+  </div>
+  <button class="start-btn" id="startBtn">Begin</button>
+</div>
+
+<div class="top-bar">
+  <div class="title-block">
+    <div class="title">Earth Flute</div>
+    <div class="subtitle">Lampwrecked 2026</div>
+  </div>
+  <div class="status-block" id="statusBlock">
+    <div class="status-line">Pins: <span class="val" id="pinCount">0</span></div>
+    <div class="status-line">Sounding: <span class="val" id="voiceCount">0</span></div>
+    <div class="data-source">data: open-meteo.com</div>
+  </div>
+</div>
+
+<div class="instructions" id="instructions">
+  <p>Click the globe to drop a pin</p>
+  <p>Drag to rotate · Scroll to zoom</p>
+</div>
+
+<div class="pin-panel" id="pinPanel"></div>
+<div class="coord-tooltip" id="coordTooltip"></div>
+<div class="note-flash" id="noteFlash"></div>
+<div class="loading-indicator" id="loadingIndicator">Fetching wind…</div>
+
+<div id="canvas-container"></div>
+
+<script>
+// ─── AUDIO ENGINE ───
+// Shared resources — created once, used by all voices
+const MAX_PINS = 8;
+let sharedReverb = null;
+let sharedReverbSend = null;
+let sharedNoiseBuf = null;
+let masterGain = null;
+let masterLimiter = null;
+
+function initAudioShared(ctx) {
+  // Master output with limiter to prevent clipping
+  masterGain = ctx.createGain();
+  masterGain.gain.value = 0.85;
+  masterLimiter = ctx.createDynamicsCompressor();
+  masterLimiter.threshold.value = -6;
+  masterLimiter.knee.value = 6;
+  masterLimiter.ratio.value = 12;
+  masterLimiter.attack.value = 0.003;
+  masterLimiter.release.value = 0.15;
+  masterGain.connect(masterLimiter);
+  masterLimiter.connect(ctx.destination);
+
+  // One shared reverb for all voices
+  sharedReverb = ctx.createConvolver();
+  const rate = ctx.sampleRate;
+  const len = rate * 3;
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
+  }
+  sharedReverb.buffer = buf;
+  sharedReverbSend = ctx.createGain();
+  sharedReverbSend.gain.value = 0.35;
+  sharedReverbSend.connect(sharedReverb);
+  sharedReverb.connect(masterGain);
+
+  // One shared noise buffer
+  const noiseLen = ctx.sampleRate * 2;
+  sharedNoiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+  const nd = sharedNoiseBuf.getChannelData(0);
+  for (let i = 0; i < noiseLen; i++) nd[i] = Math.random() * 2 - 1;
+}
+
+class FluteVoice {
+  constructor(ctx) {
+    this.ctx = ctx;
+
+    // Single carrier oscillator
+    this.carrier = ctx.createOscillator();
+    this.carrier.type = 'sine';
+
+    // FM modulator for breathiness
+    this.modulator = ctx.createOscillator();
+    this.modGain = ctx.createGain();
+    this.modulator.type = 'sine';
+    this.modulator.frequency.value = 2.2;
+    this.modGain.gain.value = 3;
+    this.modulator.connect(this.modGain);
+    this.modGain.connect(this.carrier.frequency);
+
+    // Vibrato
+    this.vibratoOsc = ctx.createOscillator();
+    this.vibratoGain = ctx.createGain();
+    this.vibratoOsc.type = 'sine';
+    this.vibratoOsc.frequency.value = 4.2 + Math.random() * 1.5;
+    this.vibratoGain.gain.value = 3;
+    this.vibratoOsc.connect(this.vibratoGain);
+    this.vibratoGain.connect(this.carrier.frequency);
+
+    // Breath noise — reuses shared buffer
+    this.breathNoise = ctx.createBufferSource();
+    this.breathNoise.buffer = sharedNoiseBuf;
+    this.breathNoise.loop = true;
+    this.breathFilter = ctx.createBiquadFilter();
+    this.breathFilter.type = 'bandpass';
+    this.breathFilter.frequency.value = 2200;
+    this.breathFilter.Q.value = 1.2;
+    this.breathGain = ctx.createGain();
+    this.breathGain.gain.value = 0;
+    this.breathNoise.connect(this.breathFilter);
+    this.breathFilter.connect(this.breathGain);
+
+    // Formant filter
+    this.filter = ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = 2400;
+    this.filter.Q.value = 2;
+
+    // Voice output gain
+    this.mainGain = ctx.createGain();
+    this.mainGain.gain.value = 0;
+
+    // Routing — dry to master, wet to shared reverb
+    this.carrier.connect(this.filter);
+    this.breathGain.connect(this.filter);
+    this.filter.connect(this.mainGain);
+    this.mainGain.connect(masterGain);          // dry path
+    this.mainGain.connect(sharedReverbSend);    // shared reverb send
+
+    this.carrier.start();
+    this.modulator.start();
+    this.vibratoOsc.start();
+    this.breathNoise.start();
+  }
+
+  setNote(freq) {
+    const now = this.ctx.currentTime;
+    this.carrier.frequency.setTargetAtTime(freq, now, 0.12);
+    this.filter.frequency.setTargetAtTime(Math.min(freq * 5, 5500), now, 0.08);
+  }
+
+  setVolume(vol) {
+    const now = this.ctx.currentTime;
+    const v = Math.max(0, Math.min(1, vol));
+    this.mainGain.gain.setTargetAtTime(v * 0.14, now, 0.2);
+    this.breathGain.gain.setTargetAtTime(v * 0.025, now, 0.15);
+    this.vibratoGain.gain.setTargetAtTime(2 + v * 5, now, 0.15);
+    this.modGain.gain.setTargetAtTime(1 + v * 4, now, 0.15);
+  }
+
+  destroy() {
+    try { this.carrier.stop(); this.modulator.stop(); this.vibratoOsc.stop(); this.breathNoise.stop(); } catch(e) {}
+    this.mainGain.disconnect();
+  }
+}
+
+// ─── MUSICAL MAPPING ───
+const SCALE_FREQS = [];
+const BASE_NOTES = [261.63, 293.66, 329.63, 392.00, 440.00];
+const NOTE_LABELS = ['C', 'D', 'E', 'G', 'A'];
+for (let oct = 0; oct < 3; oct++) {
+  for (const f of BASE_NOTES) SCALE_FREQS.push(f * Math.pow(2, oct));
+}
+
+function directionToFreq(deg) {
+  const idx = Math.floor((deg / 360) * SCALE_FREQS.length) % SCALE_FREQS.length;
+  return SCALE_FREQS[idx];
+}
+
+function freqToNoteName(freq) {
+  let bestIdx = 0, minDist = Infinity;
+  SCALE_FREQS.forEach((f, i) => { const d = Math.abs(f - freq); if (d < minDist) { minDist = d; bestIdx = i; } });
+  return NOTE_LABELS[bestIdx % 5] + (4 + Math.floor(bestIdx / 5));
+}
+
+function degToCompass(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+// ─── WIND API ───
+const loadingEl = document.getElementById('loadingIndicator');
+async function fetchWind(lat, lon) {
+  loadingEl.classList.add('visible');
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`);
+    const data = await res.json();
+    loadingEl.classList.remove('visible');
+    return { speed: data.current?.wind_speed_10m ?? 0, direction: data.current?.wind_direction_10m ?? 0 };
+  } catch (e) {
+    loadingEl.classList.remove('visible');
+    return { speed: 2 + Math.random() * 6, direction: Math.random() * 360 };
+  }
+}
+
+// ─── STATE ───
+let audioCtx = null;
+const pins = [];
+let started = false;
+
+// ─── THREE.JS ───
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 3;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+
+const textureLoader = new THREE.TextureLoader();
+const earthGroup = new THREE.Group();
+scene.add(earthGroup);
+
+const earthGeo = new THREE.SphereGeometry(1, 96, 96);
+const earthMat = new THREE.MeshPhongMaterial({
+  color: 0x1a2a20, emissive: 0x0a1510, specular: 0x2a4a3a, shininess: 12, transparent: true, opacity: 0.95
+});
+const earth = new THREE.Mesh(earthGeo, earthMat);
+earthGroup.add(earth);
+
+// Load Earth texture — try multiple sources
+const textureSources = [
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Blue_Marble_2002.png/1280px-Blue_Marble_2002.png',
+  'https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg'
+];
+let textureLoaded = false;
+
+function tryLoadTexture(idx) {
+  if (idx >= textureSources.length) { addContinentPoints(); return; }
+  textureLoader.load(textureSources[idx],
+    (tex) => {
+      if (textureLoaded) return;
+      textureLoaded = true;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      earthMat.map = tex;
+      earthMat.color.set(0xcccccc);
+      earthMat.emissive.set(0x0d1510);
+      earthMat.needsUpdate = true;
+    },
+    undefined,
+    () => tryLoadTexture(idx + 1)
+  );
+}
+tryLoadTexture(0);
+
+// Wireframe
+const wireGeo = new THREE.SphereGeometry(1.003, 36, 18);
+earthGroup.add(new THREE.Mesh(wireGeo, new THREE.MeshBasicMaterial({ color: 0x3d6b57, wireframe: true, transparent: true, opacity: 0.06 })));
+
+// Atmosphere
+const atmoMat = new THREE.ShaderMaterial({
+  vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `varying vec3 vN; void main(){ float i=pow(0.62-dot(vN,vec3(0,0,1)),2.8); gl_FragColor=vec4(0.49,0.72,0.63,1)*i*0.4; }`,
+  blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 64, 64), atmoMat));
+
+function addContinentPoints() {
+  const r = [...gP(35,50,-130,-70,350),...gP(25,35,-120,-80,150),...gP(-40,10,-80,-35,280),...gP(40,60,-10,40,220),...gP(35,42,-10,35,100),...gP(-30,30,-15,50,400),...gP(10,60,60,140,450),...gP(20,45,25,60,150),...gP(-40,-12,115,155,130)];
+  const geo = new THREE.BufferGeometry();
+  const pos = [];
+  for (const [lat,lon] of r) { const p=(90-lat)*Math.PI/180,t=(lon+180)*Math.PI/180,R=1.004; pos.push(-R*Math.sin(p)*Math.cos(t),R*Math.cos(p),R*Math.sin(p)*Math.sin(t)); }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  earthGroup.add(new THREE.Points(geo, new THREE.PointsMaterial({color:0x7eb8a0,size:0.007,transparent:true,opacity:0.45,sizeAttenuation:true})));
+}
+function gP(a,b,c,d,n){ const p=[]; for(let i=0;i<n;i++) p.push([a+Math.random()*(b-a)+(Math.random()-.5)*4, c+Math.random()*(d-c)+(Math.random()-.5)*4]); return p; }
+
+// Lighting
+scene.add(new THREE.AmbientLight(0x445544, 0.6));
+const dl = new THREE.DirectionalLight(0x99ccbb, 0.9); dl.position.set(5,3,5); scene.add(dl);
+const bl = new THREE.DirectionalLight(0x334455, 0.3); bl.position.set(-3,-2,-3); scene.add(bl);
+
+// ─── PIN VISUALS ───
+function createPinMesh(lat, lon) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  const r = 1.012;
+  const x = -r * Math.sin(phi) * Math.cos(theta);
+  const y = r * Math.cos(phi);
+  const z = r * Math.sin(phi) * Math.sin(theta);
+
+  const group = new THREE.Group();
+  const spikeGeo = new THREE.CylinderGeometry(0.003, 0.001, 0.06, 6);
+  const spike = new THREE.Mesh(spikeGeo, new THREE.MeshBasicMaterial({ color: 0xc4956a }));
+  spike.position.y = 0.03;
+  group.add(spike);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 12), new THREE.MeshBasicMaterial({ color: 0xc4956a }));
+  head.position.y = 0.065;
+  group.add(head);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.015, 0.03, 32),
+    new THREE.MeshBasicMaterial({ color: 0x7eb8a0, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+  );
+  group.add(ring);
+
+  group.position.set(x, y, z);
+  group.lookAt(0, 0, 0);
+  group.rotateX(Math.PI);
+  earthGroup.add(group);
+  return { group, ring, head };
+}
+
+// ─── PIN MANAGEMENT ───
+async function addPin(lat, lon) {
+  if (!audioCtx) return;
+  if (pins.length >= MAX_PINS) {
+    showNoteFlash('MAX ' + MAX_PINS);
+    return;
+  }
+  const id = Date.now() + Math.random();
+  const voice = new FluteVoice(audioCtx);
+  const mesh = createPinMesh(lat, lon);
+  const pin = { id, lat, lon, voice, mesh, wind: { speed: 0, direction: 0 }, currentNote: '—', currentFreq: 0 };
+  pins.push(pin);
+  updatePinPanel();
+  updateStatus();
+
+  const wind = await fetchWind(lat, lon);
+  pin.wind = wind;
+  const freq = directionToFreq(wind.direction);
+  pin.currentFreq = freq;
+  pin.currentNote = freqToNoteName(freq);
+  pin.voice.setNote(freq);
+  pin.voice.setVolume(Math.min(wind.speed / 15, 1));
+  updatePinPanel();
+  updateStatus();
+  showNoteFlash(pin.currentNote);
+
+  pin.interval = setInterval(async () => {
+    const w = await fetchWind(pin.lat, pin.lon);
+    pin.wind = w;
+    const f = directionToFreq(w.direction);
+    pin.currentFreq = f;
+    pin.currentNote = freqToNoteName(f);
+    pin.voice.setNote(f);
+    pin.voice.setVolume(Math.min(w.speed / 15, 1));
+    updatePinPanel();
+    updateStatus();
+  }, 30000);
+
+  pin.breathInterval = setInterval(() => {
+    const t = Date.now() / 1000;
+    const v = Math.sin(t * 0.7 + id) * 0.4 + Math.sin(t * 1.3 + id * 2) * 0.2;
+    const speed = Math.max(0, pin.wind.speed + v);
+    pin.voice.setVolume(Math.min(speed / 15, 1));
+  }, 80);
+}
+
+function removePin(id) {
+  const idx = pins.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const pin = pins[idx];
+  pin.voice.destroy();
+  clearInterval(pin.interval);
+  clearInterval(pin.breathInterval);
+  earthGroup.remove(pin.mesh.group);
+  pins.splice(idx, 1);
+  updatePinPanel();
+  updateStatus();
+}
+
+// ─── UI ───
+function updatePinPanel() {
+  const panel = document.getElementById('pinPanel');
+  panel.innerHTML = '';
+  pins.forEach((pin, i) => {
+    const pct = Math.min(pin.wind.speed / 20 * 100, 100);
+    const card = document.createElement('div');
+    card.className = `pin-card ${pin.wind.speed > 0.3 ? 'active' : ''}`;
+    card.innerHTML = `<div class="pin-card-header"><span class="pin-name">${i+1}</span><button class="pin-remove" data-idx="${i}">×</button></div><div class="pin-data"><span class="note-val">${pin.currentNote}</span> <span class="val">${degToCompass(pin.wind.direction)}</span><br>${pin.lat.toFixed(1)}°, ${pin.lon.toFixed(1)}°</div><div class="pin-viz"><div class="pin-viz-bar" style="width:${pct}%"></div><div class="pin-viz-label">${pin.wind.speed.toFixed(1)}</div></div>`;
+    panel.appendChild(card);
+  });
+  panel.querySelectorAll('.pin-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); const i = parseInt(btn.dataset.idx); if (pins[i]) removePin(pins[i].id); });
+  });
+}
+
+function updateStatus() {
+  document.getElementById('pinCount').textContent = pins.length;
+  document.getElementById('voiceCount').textContent = pins.filter(p => p.wind.speed > 0.3).length;
+}
+
+let noteFlashTO;
+function showNoteFlash(note) {
+  const el = document.getElementById('noteFlash');
+  el.textContent = note;
+  el.classList.add('visible');
+  clearTimeout(noteFlashTO);
+  noteFlashTO = setTimeout(() => el.classList.remove('visible'), 1500);
+}
+
+// ─── RAYCASTING ───
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('coordTooltip');
+
+function getLatLonFromScreen(cx, cy) {
+  mouse.x = (cx / window.innerWidth) * 2 - 1;
+  mouse.y = -(cy / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObject(earth);
+  if (hits.length === 0) return null;
+
+  // Convert world-space hit to earthGroup local space
+  const local = earthGroup.worldToLocal(hits[0].point.clone());
+  const r = local.length();
+
+  // Inverse of createPinMesh forward transform:
+  //   x = -r * sin(phi) * cos(theta)
+  //   y =  r * cos(phi)
+  //   z =  r * sin(phi) * sin(theta)
+  // where phi = (90 - lat) * PI/180, theta = (lon + 180) * PI/180
+
+  const phi = Math.acos(local.y / r);               // acos(y/r)
+  const theta = Math.atan2(local.z, -local.x);       // atan2(z, -x)
+  const lat = 90 - phi * 180 / Math.PI;
+  let lon = theta * 180 / Math.PI - 180;
+  if (lon < -180) lon += 360;
+  if (lon > 180) lon -= 360;
+  return { lat, lon };
+}
+
+// ─── UNIFIED INPUT — single system, no double-fire ───
+let isDragging = false;
+let dragTotal = 0;
+let prevPtr = { x: 0, y: 0 };
+let targetRot = { x: 0.3, y: 0 };
+let usingTouch = false;
+
+renderer.domElement.addEventListener('mousedown', (e) => {
+  if (usingTouch) return; // Skip if touch is active
+  isDragging = true;
+  dragTotal = 0;
+  prevPtr = { x: e.clientX, y: e.clientY };
+});
+
+renderer.domElement.addEventListener('mousemove', (e) => {
+  if (usingTouch) return;
+  const ll = getLatLonFromScreen(e.clientX, e.clientY);
+  if (ll) {
+    tooltip.textContent = `${ll.lat.toFixed(1)}°, ${ll.lon.toFixed(1)}°`;
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+    tooltip.classList.add('visible');
+  } else {
+    tooltip.classList.remove('visible');
+  }
+  if (!isDragging) return;
+  const dx = e.clientX - prevPtr.x, dy = e.clientY - prevPtr.y;
+  dragTotal += Math.abs(dx) + Math.abs(dy);
+  targetRot.y += dx * 0.005;
+  targetRot.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRot.x + dy * 0.005));
+  prevPtr = { x: e.clientX, y: e.clientY };
+});
+
+renderer.domElement.addEventListener('mouseup', (e) => {
+  if (usingTouch) return;
+  isDragging = false;
+  if (started && dragTotal < 6) {
+    const ll = getLatLonFromScreen(e.clientX, e.clientY);
+    if (ll) { addPin(ll.lat, ll.lon); document.getElementById('instructions').classList.add('hidden'); }
+  }
+});
+
+// Touch — sets flag to block mouse events
+renderer.domElement.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  usingTouch = true;
+  if (e.touches.length === 1) {
+    isDragging = true;
+    dragTotal = 0;
+    prevPtr = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    // Pinch zoom
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    if (lastPinchDist > 0) {
+      camera.position.z = Math.max(1.5, Math.min(6, camera.position.z + (lastPinchDist - dist) * 0.008));
+    }
+    lastPinchDist = dist;
+    return;
+  }
+  if (!isDragging || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const dx = t.clientX - prevPtr.x, dy = t.clientY - prevPtr.y;
+  dragTotal += Math.abs(dx) + Math.abs(dy);
+  targetRot.y += dx * 0.005;
+  targetRot.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRot.x + dy * 0.005));
+  prevPtr = { x: t.clientX, y: t.clientY };
+}, { passive: false });
+
+let lastPinchDist = 0;
+
+renderer.domElement.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  lastPinchDist = 0;
+  isDragging = false;
+  if (started && dragTotal < 12 && e.changedTouches.length === 1) {
+    const t = e.changedTouches[0];
+    const ll = getLatLonFromScreen(t.clientX, t.clientY);
+    if (ll) { addPin(ll.lat, ll.lon); document.getElementById('instructions').classList.add('hidden'); }
+  }
+  // Reset touch flag after delay
+  setTimeout(() => { usingTouch = false; }, 300);
+}, { passive: false });
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  camera.position.z = Math.max(1.5, Math.min(6, camera.position.z + e.deltaY * 0.002));
+}, { passive: true });
+
+// ─── ANIMATION ───
+function animate() {
+  requestAnimationFrame(animate);
+  if (!isDragging) targetRot.y += 0.0006;
+  earthGroup.rotation.x += (targetRot.x - earthGroup.rotation.x) * 0.05;
+  earthGroup.rotation.y += (targetRot.y - earthGroup.rotation.y) * 0.05;
+
+  const t = Date.now() / 1000;
+  pins.forEach(pin => {
+    const intensity = Math.min(pin.wind.speed / 10, 1);
+    const pulse = 1 + Math.sin(t * 2 + pin.id) * 0.25 * intensity;
+    pin.mesh.ring.scale.set(pulse, pulse, 1);
+    pin.mesh.ring.material.opacity = 0.25 + Math.sin(t * 1.5 + pin.id) * 0.2 * intensity;
+    pin.mesh.head.material.color.setHSL(0.08, 0.5, 0.4 + intensity * 0.3);
+  });
+
+  renderer.render(scene, camera);
+}
+
+// ─── START ───
+document.getElementById('startBtn').addEventListener('click', () => {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  initAudioShared(audioCtx);
+  started = true;
+  document.getElementById('startOverlay').classList.add('hidden');
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
