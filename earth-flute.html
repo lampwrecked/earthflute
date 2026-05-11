@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>EARTH FLUTE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0b0f;
+    --surface: rgba(20, 22, 30, 0.88);
+    --accent: #7eb8a0;
+    --accent-dim: #3d6b57;
+    --warm: #c4956a;
+    --text: #d4d0c8;
+    --text-dim: #6b6860;
+    --glow: rgba(126, 184, 160, 0.15);
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+    height: 100vh; width: 100vw;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  #canvas-container { position: absolute; inset: 0; z-index: 1; }
+  canvas { display: block; touch-action: none; }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, rgba(10,11,15,0.95) 0%, transparent 100%);
+    pointer-events: none;
+  }
+  .title-block { pointer-events: auto; }
+  .title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 24px; font-weight: 300; letter-spacing: 6px;
+    color: var(--accent); text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 9px; letter-spacing: 3px;
+    color: var(--text-dim); margin-top: 2px; text-transform: uppercase;
+  }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    position: fixed; top: 52px; left: 12px; right: 12px; z-index: 110;
+    display: flex; gap: 5px; align-items: center; pointer-events: auto;
+    flex-wrap: wrap;
+  }
+  .tool-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 1px;
+    color: var(--text-dim); background: var(--surface);
+    border: 1px solid rgba(126,184,160,0.15);
+    border-radius: 4px; padding: 6px 10px;
+    cursor: pointer; text-transform: uppercase;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .tool-btn:hover, .tool-btn.active {
+    color: var(--accent); border-color: var(--accent-dim);
+    background: rgba(126,184,160,0.08);
+  }
+  .tool-btn.muted { color: var(--warm); border-color: rgba(196,149,106,0.3); }
+
+  /* ── DROPDOWN MENUS ── */
+  .inst-menu {
+    position: fixed; z-index: 120;
+    background: var(--surface); border: 1px solid rgba(126,184,160,0.15);
+    border-radius: 6px; padding: 4px; min-width: 130px;
+    display: none; flex-direction: column;
+    backdrop-filter: blur(8px);
+    max-height: 60vh; overflow-y: auto;
+  }
+  .inst-menu::-webkit-scrollbar { width: 2px; }
+  .inst-menu::-webkit-scrollbar-thumb { background: var(--accent-dim); }
+  .inst-menu.open { display: flex; }
+  .inst-option, .scale-option, .arp-mode-option {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 1px;
+    color: var(--text-dim); background: none; border: none;
+    padding: 7px 12px; cursor: pointer; text-align: left;
+    text-transform: uppercase; border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .inst-option:hover, .scale-option:hover, .arp-mode-option:hover {
+    background: rgba(126,184,160,0.08); color: var(--text);
+  }
+  .inst-option.selected, .scale-option.selected, .arp-mode-option.selected {
+    color: var(--accent);
+  }
+
+  /* ── INSTRUCTIONS ── */
+  .instructions {
+    position: fixed; bottom: 130px; left: 50%; transform: translateX(-50%);
+    z-index: 100; text-align: center; pointer-events: none;
+    transition: opacity 0.8s;
+  }
+  .instructions.hidden { opacity: 0; }
+  .instructions p {
+    font-size: 10px; letter-spacing: 2px;
+    color: var(--text-dim); line-height: 2; text-transform: uppercase;
+  }
+
+  /* ── PIN PANEL ── */
+  .pin-panel {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 6px 6px; pointer-events: auto;
+    background: linear-gradient(0deg, rgba(10,11,15,0.92) 60%, transparent 100%);
+  }
+  .pin-card {
+    background: var(--surface);
+    border: 1px solid rgba(126,184,160,0.1);
+    border-radius: 5px; padding: 5px 7px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: calc(25% - 3px); flex-shrink: 0;
+  }
+  .pin-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 10px var(--glow);
+  }
+  .pin-card.dragging-card {
+    border-color: var(--warm);
+    box-shadow: 0 0 12px rgba(196,149,106,0.2);
+  }
+  .pin-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 2px;
+  }
+  .pin-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px; font-weight: 400; color: var(--text); letter-spacing: 1px;
+  }
+  .pin-remove {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 14px; padding: 0 2px;
+    transition: color 0.2s; line-height: 1;
+  }
+  .pin-remove:hover { color: var(--warm); }
+  .pin-data {
+    font-size: 8px; letter-spacing: 0.5px;
+    color: var(--text-dim); line-height: 1.5; text-transform: uppercase;
+  }
+  .pin-data .val { color: var(--accent); }
+  .pin-data .note-val { color: var(--warm); font-size: 11px; }
+  .pin-viz {
+    margin-top: 2px; height: 12px; position: relative;
+    overflow: hidden; border-radius: 3px;
+    background: rgba(126,184,160,0.05);
+  }
+  .pin-viz-bar {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius: 3px; transition: width 0.5s ease; opacity: 0.6;
+  }
+  .pin-viz-label {
+    position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+    font-size: 7px; color: var(--text-dim); letter-spacing: 0.5px;
+  }
+
+  /* ── MISC ── */
+  .coord-tooltip {
+    position: fixed; z-index: 150;
+    font-size: 10px; letter-spacing: 1px; color: var(--accent);
+    background: var(--surface); border: 1px solid var(--accent-dim);
+    padding: 4px 8px; border-radius: 4px;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  }
+  .coord-tooltip.visible { opacity: 1; }
+  .note-flash {
+    position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%);
+    z-index: 100; font-family: 'Cormorant Garamond', serif;
+    font-size: 36px; font-weight: 300; color: var(--warm);
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; letter-spacing: 6px;
+  }
+  .note-flash.visible { opacity: 1; }
+  .loading-indicator {
+    position: fixed; bottom: 140px; left: 24px; z-index: 100;
+    font-size: 9px; letter-spacing: 2px; color: var(--accent-dim);
+    text-transform: uppercase; pointer-events: none;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .loading-indicator.visible { opacity: 1; }
+  .drag-hint {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 100; font-size: 10px; letter-spacing: 2px;
+    color: var(--warm); text-transform: uppercase;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  }
+  .drag-hint.visible { opacity: 1; }
+
+  /* ── START OVERLAY ── */
+  .start-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(10,11,15,0.94);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: opacity 0.6s;
+  }
+  .start-overlay.hidden { opacity: 0; pointer-events: none; }
+  .start-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 48px; font-weight: 300; letter-spacing: 12px;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .start-sub {
+    font-size: 11px; letter-spacing: 4px;
+    color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .start-detail {
+    font-size: 10px; letter-spacing: 2px; color: var(--text-dim);
+    opacity: 0.5; margin-bottom: 32px; text-align: center; line-height: 2;
+  }
+  .start-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 3px; color: var(--accent);
+    border: 1px solid var(--accent-dim); background: none;
+    padding: 12px 32px; cursor: pointer; text-transform: uppercase;
+    transition: all 0.3s;
+  }
+  .start-btn:hover { background: var(--glow); border-color: var(--accent); }
+
+  @media (max-width: 600px) {
+    .pin-card { width: calc(25% - 3px); padding: 4px 5px; }
+    .title { font-size: 18px; letter-spacing: 3px; }
+    .start-title { font-size: 28px; letter-spacing: 6px; }
+    .toolbar { gap: 4px; }
+    .tool-btn { padding: 5px 7px; font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="start-overlay" id="startOverlay">
+  <div class="start-title">Earth Flute</div>
+  <div class="start-sub">Lampwrecked 2026</div>
+  <div class="start-detail">
+    Wind speed → volume<br>
+    Wind direction → pitch (pentatonic)<br>
+    Live data · Open-Meteo
+  </div>
+  <button class="start-btn" id="startBtn">Begin</button>
+</div>
+
+<div class="top-bar">
+  <div class="title-block">
+    <div class="title">Earth Flute</div>
+    <div class="subtitle">Lampwrecked 2026</div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="tool-btn" id="btnInst">Flute ▾</button>
+  <button class="tool-btn" id="btnScale">Pentatonic ▾</button>
+  <button class="tool-btn" id="btnArp">Arp: Off</button>
+  <button class="tool-btn" id="btnArpRate" style="display:none">1/4</button>
+  <button class="tool-btn" id="btnMute">Mute</button>
+  <button class="tool-btn" id="btnRandom">Rand</button>
+  <button class="tool-btn" id="btnReset">Reset</button>
+</div>
+
+<div class="inst-menu" id="instMenu">
+  <button class="inst-option selected" data-inst="flute">Flute</button>
+  <button class="inst-option" data-inst="pad">Pad</button>
+  <button class="inst-option" data-inst="bell">Bell</button>
+  <button class="inst-option" data-inst="drone">Drone</button>
+  <button class="inst-option" data-inst="reed">Reed</button>
+</div>
+
+<div class="inst-menu" id="scaleMenu">
+  <button class="scale-option selected" data-scale="pentatonic">Pentatonic</button>
+  <button class="scale-option" data-scale="major">Major</button>
+  <button class="scale-option" data-scale="minor">Minor</button>
+  <button class="scale-option" data-scale="dorian">Dorian</button>
+  <button class="scale-option" data-scale="mixolydian">Mixolydian</button>
+  <button class="scale-option" data-scale="lydian">Lydian</button>
+  <button class="scale-option" data-scale="phrygian">Phrygian</button>
+  <button class="scale-option" data-scale="wholetone">Whole Tone</button>
+  <button class="scale-option" data-scale="blues">Blues</button>
+  <button class="scale-option" data-scale="hirajoshi">Hirajoshi</button>
+  <button class="scale-option" data-scale="chromatic">Chromatic</button>
+</div>
+
+<div class="inst-menu" id="arpMenu">
+  <button class="arp-mode-option selected" data-arp="off">Off</button>
+  <button class="arp-mode-option" data-arp="up">Up</button>
+  <button class="arp-mode-option" data-arp="down">Down</button>
+  <button class="arp-mode-option" data-arp="updown">Up/Down</button>
+  <button class="arp-mode-option" data-arp="random">Random</button>
+  <button class="arp-mode-option" data-arp="scatter">Scatter</button>
+</div>
+
+<div class="instructions" id="instructions">
+  <p>Tap globe to drop a pin · Long-press pin to drag</p>
+  <p>Drag globe to rotate · Pinch to zoom</p>
+</div>
+
+<div class="pin-panel" id="pinPanel"></div>
+<div class="coord-tooltip" id="coordTooltip"></div>
+<div class="note-flash" id="noteFlash"></div>
+<div class="loading-indicator" id="loadingIndicator">Fetching wind…</div>
+<div class="drag-hint" id="dragHint">Dragging pin…</div>
+<div id="canvas-container"></div>
+
+<script>
+// ═══════════════════════════════════════
+// INSTRUMENT DEFINITIONS
+// ═══════════════════════════════════════
+const INSTRUMENTS = {
+  flute: {
+    name: 'Flute',
+    carrier: 'sine',
+    modFreq: 2.2,
+    modDepth: 3,
+    vibratoRate: [4.2, 5.7],
+    vibratoDepth: 3,
+    filterFreq: 2400,
+    filterQ: 2,
+    breathAmt: 0.025,
+    breathFreq: 2200,
+    attack: 0.2,
+    gainScale: 0.14
+  },
+  pad: {
+    name: 'Pad',
+    carrier: 'triangle',
+    modFreq: 0.3,
+    modDepth: 8,
+    vibratoRate: [2.0, 3.0],
+    vibratoDepth: 5,
+    filterFreq: 1200,
+    filterQ: 0.7,
+    breathAmt: 0.04,
+    breathFreq: 800,
+    attack: 0.6,
+    gainScale: 0.12
+  },
+  bell: {
+    name: 'Bell',
+    carrier: 'sine',
+    modFreq: 5.5,
+    modDepth: 25,
+    vibratoRate: [6.0, 8.0],
+    vibratoDepth: 1.5,
+    filterFreq: 5000,
+    filterQ: 1,
+    breathAmt: 0.008,
+    breathFreq: 4000,
+    attack: 0.05,
+    gainScale: 0.10
+  },
+  drone: {
+    name: 'Drone',
+    carrier: 'sawtooth',
+    modFreq: 0.15,
+    modDepth: 12,
+    vibratoRate: [1.2, 2.0],
+    vibratoDepth: 8,
+    filterFreq: 600,
+    filterQ: 4,
+    breathAmt: 0.05,
+    breathFreq: 500,
+    attack: 0.8,
+    gainScale: 0.08
+  },
+  reed: {
+    name: 'Reed',
+    carrier: 'square',
+    modFreq: 3.5,
+    modDepth: 6,
+    vibratoRate: [4.8, 6.2],
+    vibratoDepth: 4,
+    filterFreq: 1800,
+    filterQ: 5,
+    breathAmt: 0.035,
+    breathFreq: 1600,
+    attack: 0.12,
+    gainScale: 0.09
+  }
+};
+
+let currentInstrument = 'flute';
+
+// ═══════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════
+const MAX_PINS = 8;
+let sharedReverb = null;
+let sharedReverbSend = null;
+let sharedNoiseBuf = null;
+let masterGain = null;
+let masterLimiter = null;
+let isMuted = false;
+
+function initAudioShared(ctx) {
+  masterGain = ctx.createGain();
+  masterGain.gain.value = 0.85;
+  masterLimiter = ctx.createDynamicsCompressor();
+  masterLimiter.threshold.value = -6;
+  masterLimiter.knee.value = 6;
+  masterLimiter.ratio.value = 12;
+  masterLimiter.attack.value = 0.003;
+  masterLimiter.release.value = 0.15;
+  masterGain.connect(masterLimiter);
+  masterLimiter.connect(ctx.destination);
+
+  sharedReverb = ctx.createConvolver();
+  const rate = ctx.sampleRate, len = rate * 3;
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
+  }
+  sharedReverb.buffer = buf;
+  sharedReverbSend = ctx.createGain();
+  sharedReverbSend.gain.value = 0.35;
+  sharedReverbSend.connect(sharedReverb);
+  sharedReverb.connect(masterGain);
+
+  const noiseLen = ctx.sampleRate * 2;
+  sharedNoiseBuf = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+  const nd = sharedNoiseBuf.getChannelData(0);
+  for (let i = 0; i < noiseLen; i++) nd[i] = Math.random() * 2 - 1;
+}
+
+class Voice {
+  constructor(ctx, instKey) {
+    this.ctx = ctx;
+    const inst = INSTRUMENTS[instKey];
+    this.inst = inst;
+
+    this.carrier = ctx.createOscillator();
+    this.carrier.type = inst.carrier;
+
+    this.modulator = ctx.createOscillator();
+    this.modGain = ctx.createGain();
+    this.modulator.type = 'sine';
+    this.modulator.frequency.value = inst.modFreq;
+    this.modGain.gain.value = inst.modDepth;
+    this.modulator.connect(this.modGain);
+    this.modGain.connect(this.carrier.frequency);
+
+    this.vibratoOsc = ctx.createOscillator();
+    this.vibratoGain = ctx.createGain();
+    this.vibratoOsc.type = 'sine';
+    const vr = inst.vibratoRate;
+    this.vibratoOsc.frequency.value = vr[0] + Math.random() * (vr[1] - vr[0]);
+    this.vibratoGain.gain.value = inst.vibratoDepth;
+    this.vibratoOsc.connect(this.vibratoGain);
+    this.vibratoGain.connect(this.carrier.frequency);
+
+    this.breathNoise = ctx.createBufferSource();
+    this.breathNoise.buffer = sharedNoiseBuf;
+    this.breathNoise.loop = true;
+    this.breathFilter = ctx.createBiquadFilter();
+    this.breathFilter.type = 'bandpass';
+    this.breathFilter.frequency.value = inst.breathFreq;
+    this.breathFilter.Q.value = 1.2;
+    this.breathGain = ctx.createGain();
+    this.breathGain.gain.value = 0;
+    this.breathNoise.connect(this.breathFilter);
+    this.breathFilter.connect(this.breathGain);
+
+    this.filter = ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = inst.filterFreq;
+    this.filter.Q.value = inst.filterQ;
+
+    this.mainGain = ctx.createGain();
+    this.mainGain.gain.value = 0;
+
+    this.carrier.connect(this.filter);
+    this.breathGain.connect(this.filter);
+    this.filter.connect(this.mainGain);
+    this.mainGain.connect(masterGain);
+    this.mainGain.connect(sharedReverbSend);
+
+    this.carrier.start();
+    this.modulator.start();
+    this.vibratoOsc.start();
+    this.breathNoise.start();
+  }
+
+  setNote(freq) {
+    const now = this.ctx.currentTime;
+    this.carrier.frequency.setTargetAtTime(freq, now, 0.12);
+    this.filter.frequency.setTargetAtTime(
+      Math.min(freq * (this.inst.filterFreq / 500), 6000), now, 0.08
+    );
+  }
+
+  setVolume(vol) {
+    const now = this.ctx.currentTime;
+    const v = Math.max(0, Math.min(1, vol));
+    this.mainGain.gain.setTargetAtTime(v * this.inst.gainScale, now, this.inst.attack);
+    this.breathGain.gain.setTargetAtTime(v * this.inst.breathAmt, now, 0.15);
+    this.vibratoGain.gain.setTargetAtTime(
+      this.inst.vibratoDepth * (0.5 + v * 0.5), now, 0.15
+    );
+    this.modGain.gain.setTargetAtTime(
+      this.inst.modDepth * (0.3 + v * 0.7), now, 0.15
+    );
+  }
+
+  destroy() {
+    try { this.carrier.stop(); this.modulator.stop(); this.vibratoOsc.stop(); this.breathNoise.stop(); } catch(e) {}
+    this.mainGain.disconnect();
+  }
+}
+
+// ═══════════════════════════════════════
+// SCALES
+// ═══════════════════════════════════════
+// Semitone intervals from root for each scale type
+const SCALE_TYPES = {
+  pentatonic:   { name: 'Pentatonic',   intervals: [0, 2, 4, 7, 9] },
+  major:        { name: 'Major',        intervals: [0, 2, 4, 5, 7, 9, 11] },
+  minor:        { name: 'Minor',        intervals: [0, 2, 3, 5, 7, 8, 10] },
+  dorian:       { name: 'Dorian',       intervals: [0, 2, 3, 5, 7, 9, 10] },
+  mixolydian:   { name: 'Mixolydian',   intervals: [0, 2, 4, 5, 7, 9, 10] },
+  lydian:       { name: 'Lydian',       intervals: [0, 2, 4, 6, 7, 9, 11] },
+  phrygian:     { name: 'Phrygian',     intervals: [0, 1, 3, 5, 7, 8, 10] },
+  wholetone:    { name: 'Whole Tone',   intervals: [0, 2, 4, 6, 8, 10] },
+  blues:        { name: 'Blues',        intervals: [0, 3, 5, 6, 7, 10] },
+  hirajoshi:    { name: 'Hirajoshi',    intervals: [0, 2, 3, 7, 8] },
+  chromatic:    { name: 'Chromatic',    intervals: [0,1,2,3,4,5,6,7,8,9,10,11] },
+};
+
+let currentScale = 'pentatonic';
+let scaleFreqs = [];
+let scaleNoteNames = [];
+const ALL_NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const C4 = 261.63;
+
+function buildScale() {
+  const intervals = SCALE_TYPES[currentScale].intervals;
+  scaleFreqs = [];
+  scaleNoteNames = [];
+  for (let oct = 0; oct < 3; oct++) {
+    for (const semi of intervals) {
+      const freq = C4 * Math.pow(2, oct + semi / 12);
+      scaleFreqs.push(freq);
+      scaleNoteNames.push(ALL_NOTE_NAMES[semi % 12] + (4 + oct));
+    }
+  }
+}
+buildScale();
+
+function directionToFreq(deg) {
+  return scaleFreqs[Math.floor((deg / 360) * scaleFreqs.length) % scaleFreqs.length];
+}
+function freqToNoteName(freq) {
+  let bi = 0, md = Infinity;
+  scaleFreqs.forEach((f, i) => { const d = Math.abs(f - freq); if (d < md) { md = d; bi = i; } });
+  return scaleNoteNames[bi] || '—';
+}
+function degToCompass(deg) {
+  return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(deg / 22.5) % 16];
+}
+
+function changeScale(key) {
+  currentScale = key;
+  buildScale();
+  // Re-map all existing pins to new scale
+  pins.forEach(pin => {
+    const freq = directionToFreq(pin.wind.direction);
+    pin.currentFreq = freq;
+    pin.currentNote = freqToNoteName(freq);
+    pin.voice.setNote(freq);
+  });
+  updatePinPanel();
+  document.querySelectorAll('.scale-option').forEach(el => {
+    el.classList.toggle('selected', el.dataset.scale === key);
+  });
+  document.getElementById('btnScale').textContent = SCALE_TYPES[key].name + ' ▾';
+}
+
+// ═══════════════════════════════════════
+// ARPEGGIATOR
+// ═══════════════════════════════════════
+const ARP_MODES = {
+  off:      { name: 'Off' },
+  up:       { name: 'Up' },
+  down:     { name: 'Down' },
+  updown:   { name: 'Up/Down' },
+  random:   { name: 'Random' },
+  scatter:  { name: 'Scatter' },
+};
+
+const ARP_RATES = [
+  { name: '1/2', ms: 1000 },
+  { name: '1/4', ms: 500 },
+  { name: '1/8', ms: 250 },
+  { name: '1/16', ms: 125 },
+  { name: '1/3', ms: 667 },
+  { name: '1/6', ms: 333 },
+];
+
+let arpMode = 'off';
+let arpRateIdx = 1; // default 1/4
+let arpInterval = null;
+let arpStep = 0;
+let arpDirection = 1; // for updown
+
+function getArpNotes() {
+  // Collect frequencies from all active pins, sorted low to high
+  const notes = pins
+    .filter(p => p.wind.speed > 0.1 && p.currentFreq > 0)
+    .map(p => ({ freq: p.currentFreq, pin: p }))
+    .sort((a, b) => a.freq - b.freq);
+  return notes;
+}
+
+function arpTick() {
+  const notes = getArpNotes();
+  if (notes.length === 0) return;
+
+  // First silence all voices briefly
+  pins.forEach(p => p.voice.setVolume(0));
+
+  let idx;
+  switch (arpMode) {
+    case 'up':
+      idx = arpStep % notes.length;
+      arpStep++;
+      break;
+    case 'down':
+      idx = (notes.length - 1) - (arpStep % notes.length);
+      arpStep++;
+      break;
+    case 'updown':
+      idx = arpStep % notes.length;
+      if (notes.length > 1) {
+        arpStep += arpDirection;
+        if (arpStep >= notes.length - 1) arpDirection = -1;
+        if (arpStep <= 0) arpDirection = 1;
+      }
+      break;
+    case 'random':
+      idx = Math.floor(Math.random() * notes.length);
+      break;
+    case 'scatter':
+      // Play 1-3 random notes simultaneously
+      const count = Math.min(1 + Math.floor(Math.random() * 3), notes.length);
+      const indices = [];
+      while (indices.length < count) {
+        const r = Math.floor(Math.random() * notes.length);
+        if (!indices.includes(r)) indices.push(r);
+      }
+      indices.forEach(i => {
+        const vol = Math.min(notes[i].pin.wind.speed / 15, 1);
+        notes[i].pin.voice.setVolume(vol * 0.9);
+      });
+      showNoteFlash(indices.map(i => freqToNoteName(notes[i].freq)).join(' '));
+      return;
+    default:
+      return;
+  }
+
+  if (idx >= 0 && idx < notes.length) {
+    const vol = Math.min(notes[idx].pin.wind.speed / 15, 1);
+    notes[idx].pin.voice.setVolume(vol * 0.9);
+    showNoteFlash(freqToNoteName(notes[idx].freq));
+  }
+}
+
+function startArp() {
+  stopArp();
+  if (arpMode === 'off') return;
+  arpStep = 0;
+  arpDirection = 1;
+  arpInterval = setInterval(arpTick, ARP_RATES[arpRateIdx].ms);
+}
+
+function stopArp() {
+  if (arpInterval) { clearInterval(arpInterval); arpInterval = null; }
+  // Restore all volumes
+  pins.forEach(pin => {
+    pin.voice.setVolume(Math.min(pin.wind.speed / 15, 1));
+  });
+}
+
+function setArpMode(mode) {
+  arpMode = mode;
+  document.querySelectorAll('.arp-mode-option').forEach(el => {
+    el.classList.toggle('selected', el.dataset.arp === mode);
+  });
+  const btn = document.getElementById('btnArp');
+  btn.textContent = 'Arp: ' + ARP_MODES[mode].name;
+  btn.classList.toggle('active', mode !== 'off');
+  if (mode === 'off') stopArp(); else startArp();
+}
+
+function cycleArpRate() {
+  arpRateIdx = (arpRateIdx + 1) % ARP_RATES.length;
+  document.getElementById('btnArpRate').textContent = ARP_RATES[arpRateIdx].name;
+  if (arpMode !== 'off') startArp(); // restart with new rate
+}
+
+// ═══════════════════════════════════════
+// WIND API
+// ═══════════════════════════════════════
+const loadingEl = document.getElementById('loadingIndicator');
+async function fetchWind(lat, lon) {
+  loadingEl.classList.add('visible');
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`);
+    const data = await res.json();
+    loadingEl.classList.remove('visible');
+    return { speed: data.current?.wind_speed_10m ?? 0, direction: data.current?.wind_direction_10m ?? 0 };
+  } catch (e) {
+    loadingEl.classList.remove('visible');
+    return { speed: 2 + Math.random() * 6, direction: Math.random() * 360 };
+  }
+}
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let audioCtx = null;
+const pins = [];
+let started = false;
+let draggingPin = null;
+
+// ═══════════════════════════════════════
+// THREE.JS GLOBE
+// ═══════════════════════════════════════
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 3;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+
+const textureLoader = new THREE.TextureLoader();
+const earthGroup = new THREE.Group();
+scene.add(earthGroup);
+
+const earthGeo = new THREE.SphereGeometry(1, 96, 96);
+const earthMat = new THREE.MeshPhongMaterial({
+  color: 0x1a2a20, emissive: 0x0a1510, specular: 0x2a4a3a,
+  shininess: 12, transparent: true, opacity: 0.95
+});
+const earth = new THREE.Mesh(earthGeo, earthMat);
+earthGroup.add(earth);
+
+// Textures
+let textureLoaded = false;
+const texSrcs = [
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Blue_Marble_2002.png/1280px-Blue_Marble_2002.png',
+  'https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg'
+];
+function tryTex(i) {
+  if (i >= texSrcs.length) { addContinentPoints(); return; }
+  textureLoader.load(texSrcs[i], (t) => {
+    if (textureLoaded) return; textureLoaded = true;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    earthMat.map = t; earthMat.color.set(0xcccccc); earthMat.emissive.set(0x0d1510);
+    earthMat.needsUpdate = true;
+  }, undefined, () => tryTex(i + 1));
+}
+tryTex(0);
+
+// Wireframe
+earthGroup.add(new THREE.Mesh(
+  new THREE.SphereGeometry(1.003, 36, 18),
+  new THREE.MeshBasicMaterial({ color: 0x3d6b57, wireframe: true, transparent: true, opacity: 0.06 })
+));
+
+// Atmosphere
+scene.add(new THREE.Mesh(
+  new THREE.SphereGeometry(1.1, 64, 64),
+  new THREE.ShaderMaterial({
+    vertexShader: `varying vec3 vN;void main(){vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader: `varying vec3 vN;void main(){float i=pow(0.62-dot(vN,vec3(0,0,1)),2.8);gl_FragColor=vec4(0.49,0.72,0.63,1)*i*0.4;}`,
+    blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true
+  })
+));
+
+function addContinentPoints() {
+  const r=[...gP(35,50,-130,-70,350),...gP(25,35,-120,-80,150),...gP(-40,10,-80,-35,280),...gP(40,60,-10,40,220),...gP(35,42,-10,35,100),...gP(-30,30,-15,50,400),...gP(10,60,60,140,450),...gP(20,45,25,60,150),...gP(-40,-12,115,155,130)];
+  const geo=new THREE.BufferGeometry(),pos=[];
+  for(const[lat,lon]of r){const p=(90-lat)*Math.PI/180,t=(lon+180)*Math.PI/180,R=1.004;pos.push(-R*Math.sin(p)*Math.cos(t),R*Math.cos(p),R*Math.sin(p)*Math.sin(t));}
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  earthGroup.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0x7eb8a0,size:0.007,transparent:true,opacity:0.45,sizeAttenuation:true})));
+}
+function gP(a,b,c,d,n){const p=[];for(let i=0;i<n;i++)p.push([a+Math.random()*(b-a)+(Math.random()-.5)*4,c+Math.random()*(d-c)+(Math.random()-.5)*4]);return p;}
+
+// Lighting
+scene.add(new THREE.AmbientLight(0x445544, 0.6));
+const dl=new THREE.DirectionalLight(0x99ccbb,0.9);dl.position.set(5,3,5);scene.add(dl);
+const bl=new THREE.DirectionalLight(0x334455,0.3);bl.position.set(-3,-2,-3);scene.add(bl);
+
+// ═══════════════════════════════════════
+// PIN MESH
+// ═══════════════════════════════════════
+function latLonToPos(lat, lon, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function createPinMesh(lat, lon) {
+  const pos = latLonToPos(lat, lon, 1.012);
+  const group = new THREE.Group();
+
+  const spike = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.003, 0.001, 0.06, 6),
+    new THREE.MeshBasicMaterial({ color: 0xc4956a })
+  );
+  spike.position.y = 0.03;
+  group.add(spike);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.012, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xc4956a })
+  );
+  head.position.y = 0.065;
+  group.add(head);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.015, 0.03, 32),
+    new THREE.MeshBasicMaterial({ color: 0x7eb8a0, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+  );
+  group.add(ring);
+
+  group.position.copy(pos);
+  group.lookAt(0, 0, 0);
+  group.rotateX(Math.PI);
+  earthGroup.add(group);
+  return { group, ring, head };
+}
+
+function movePinMesh(pin, lat, lon) {
+  const pos = latLonToPos(lat, lon, 1.012);
+  pin.mesh.group.position.copy(pos);
+  pin.mesh.group.lookAt(0, 0, 0);
+  pin.mesh.group.rotateX(Math.PI);
+}
+
+// ═══════════════════════════════════════
+// PIN MANAGEMENT
+// ═══════════════════════════════════════
+async function addPin(lat, lon, skipFetch) {
+  if (!audioCtx) return;
+  if (pins.length >= MAX_PINS) { showNoteFlash('MAX ' + MAX_PINS); return; }
+
+  const id = Date.now() + Math.random();
+  const voice = new Voice(audioCtx, currentInstrument);
+  const mesh = createPinMesh(lat, lon);
+  const pin = { id, lat, lon, voice, mesh, wind: { speed: 0, direction: 0 }, currentNote: '—', currentFreq: 0 };
+  pins.push(pin);
+  updatePinPanel();
+
+  if (!skipFetch) {
+    const wind = await fetchWind(lat, lon);
+    applyWind(pin, wind);
+  }
+
+  pin.interval = setInterval(async () => {
+    const w = await fetchWind(pin.lat, pin.lon);
+    applyWind(pin, w);
+  }, 30000);
+
+  pin.breathInterval = setInterval(() => {
+    if (arpMode !== 'off') return; // arp controls volume when active
+    const t = Date.now() / 1000;
+    const v = Math.sin(t * 0.7 + id) * 0.4 + Math.sin(t * 1.3 + id * 2) * 0.2;
+    const speed = Math.max(0, pin.wind.speed + v);
+    pin.voice.setVolume(Math.min(speed / 15, 1));
+  }, 80);
+
+  return pin;
+}
+
+function applyWind(pin, wind) {
+  pin.wind = wind;
+  const freq = directionToFreq(wind.direction);
+  pin.currentFreq = freq;
+  pin.currentNote = freqToNoteName(freq);
+  pin.voice.setNote(freq);
+  pin.voice.setVolume(Math.min(wind.speed / 15, 1));
+  updatePinPanel();
+  showNoteFlash(pin.currentNote);
+}
+
+function removePin(id) {
+  const idx = pins.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const pin = pins[idx];
+  pin.voice.destroy();
+  clearInterval(pin.interval);
+  clearInterval(pin.breathInterval);
+  earthGroup.remove(pin.mesh.group);
+  pins.splice(idx, 1);
+  updatePinPanel();
+}
+
+function resetAllPins() {
+  while (pins.length > 0) removePin(pins[0].id);
+}
+
+async function randomizePins() {
+  resetAllPins();
+  const locs = [];
+  for (let i = 0; i < MAX_PINS; i++) {
+    locs.push({ lat: Math.random() * 140 - 70, lon: Math.random() * 360 - 180 });
+  }
+  for (const loc of locs) {
+    await addPin(loc.lat, loc.lon);
+  }
+}
+
+function changeInstrument(instKey) {
+  currentInstrument = instKey;
+  // Rebuild all voices with new instrument
+  pins.forEach(pin => {
+    const oldVol = pin.voice.mainGain.gain.value;
+    pin.voice.destroy();
+    pin.voice = new Voice(audioCtx, instKey);
+    if (pin.currentFreq > 0) {
+      pin.voice.setNote(pin.currentFreq);
+      pin.voice.setVolume(Math.min(pin.wind.speed / 15, 1));
+    }
+  });
+  // Update menu
+  document.querySelectorAll('.inst-option').forEach(el => {
+    el.classList.toggle('selected', el.dataset.inst === instKey);
+  });
+  document.getElementById('btnInst').textContent = INSTRUMENTS[instKey].name + ' ▾';
+}
+
+// ═══════════════════════════════════════
+// UI
+// ═══════════════════════════════════════
+function updatePinPanel() {
+  const panel = document.getElementById('pinPanel');
+  panel.innerHTML = '';
+  pins.forEach((pin, i) => {
+    const pct = Math.min(pin.wind.speed / 20 * 100, 100);
+    const card = document.createElement('div');
+    card.className = `pin-card ${pin.wind.speed > 0.3 ? 'active' : ''} ${draggingPin === pin ? 'dragging-card' : ''}`;
+    card.innerHTML = `<div class="pin-card-header"><span class="pin-name">${i+1}</span><button class="pin-remove" data-idx="${i}">×</button></div><div class="pin-data"><span class="note-val">${pin.currentNote}</span> <span class="val">${degToCompass(pin.wind.direction)}</span><br>${pin.lat.toFixed(1)}°, ${pin.lon.toFixed(1)}°</div><div class="pin-viz"><div class="pin-viz-bar" style="width:${pct}%"></div><div class="pin-viz-label">${pin.wind.speed.toFixed(1)}</div></div>`;
+    panel.appendChild(card);
+  });
+  panel.querySelectorAll('.pin-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); const i = parseInt(btn.dataset.idx); if (pins[i]) removePin(pins[i].id); });
+  });
+}
+
+let noteFlashTO;
+function showNoteFlash(note) {
+  const el = document.getElementById('noteFlash');
+  el.textContent = note;
+  el.classList.add('visible');
+  clearTimeout(noteFlashTO);
+  noteFlashTO = setTimeout(() => el.classList.remove('visible'), 1200);
+}
+
+// ═══════════════════════════════════════
+// RAYCASTING & COORDINATE CONVERSION
+// ═══════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('coordTooltip');
+const dragHint = document.getElementById('dragHint');
+
+function getLatLonFromScreen(cx, cy) {
+  mouse.x = (cx / window.innerWidth) * 2 - 1;
+  mouse.y = -(cy / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObject(earth);
+  if (hits.length === 0) return null;
+  const local = earthGroup.worldToLocal(hits[0].point.clone());
+  const r = local.length();
+  const phi = Math.acos(local.y / r);
+  const theta = Math.atan2(local.z, -local.x);
+  const lat = 90 - phi * 180 / Math.PI;
+  let lon = theta * 180 / Math.PI - 180;
+  if (lon < -180) lon += 360;
+  if (lon > 180) lon -= 360;
+  return { lat, lon };
+}
+
+// Check if a screen point is near an existing pin
+function findPinNearScreen(cx, cy) {
+  const threshold = 30; // pixels
+  for (const pin of pins) {
+    const pos = latLonToPos(pin.lat, pin.lon, 1.012);
+    pos.applyMatrix4(earthGroup.matrixWorld);
+    const projected = pos.clone().project(camera);
+    const sx = (projected.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+    const dist = Math.hypot(cx - sx, cy - sy);
+    if (dist < threshold && projected.z < 1) return pin;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════
+// INPUT HANDLING
+// ═══════════════════════════════════════
+let isDragging = false;
+let dragTotal = 0;
+let prevPtr = { x: 0, y: 0 };
+let targetRot = { x: 0.3, y: 0 };
+let usingTouch = false;
+let longPressTimer = null;
+let longPressed = false;
+let pointerDownPos = { x: 0, y: 0 };
+
+function startDragPin(pin) {
+  draggingPin = pin;
+  dragHint.classList.add('visible');
+  updatePinPanel();
+}
+
+function endDragPin() {
+  if (draggingPin) {
+    dragHint.classList.remove('visible');
+    // Refetch wind for new position
+    fetchWind(draggingPin.lat, draggingPin.lon).then(w => applyWind(draggingPin, w));
+    draggingPin = null;
+    updatePinPanel();
+  }
+}
+
+function moveDragPin(cx, cy) {
+  if (!draggingPin) return;
+  const ll = getLatLonFromScreen(cx, cy);
+  if (ll) {
+    draggingPin.lat = ll.lat;
+    draggingPin.lon = ll.lon;
+    movePinMesh(draggingPin, ll.lat, ll.lon);
+    updatePinPanel();
+  }
+}
+
+// Mouse
+renderer.domElement.addEventListener('mousedown', (e) => {
+  if (usingTouch) return;
+  isDragging = true; dragTotal = 0;
+  prevPtr = { x: e.clientX, y: e.clientY };
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+
+  const nearPin = findPinNearScreen(e.clientX, e.clientY);
+  longPressed = false;
+  if (nearPin) {
+    longPressTimer = setTimeout(() => { longPressed = true; startDragPin(nearPin); }, 400);
+  }
+});
+
+renderer.domElement.addEventListener('mousemove', (e) => {
+  if (usingTouch) return;
+
+  if (draggingPin) { moveDragPin(e.clientX, e.clientY); return; }
+
+  const ll = getLatLonFromScreen(e.clientX, e.clientY);
+  if (ll) {
+    tooltip.textContent = `${ll.lat.toFixed(1)}°, ${ll.lon.toFixed(1)}°`;
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+    tooltip.classList.add('visible');
+  } else { tooltip.classList.remove('visible'); }
+
+  if (!isDragging) return;
+  const dx = e.clientX - prevPtr.x, dy = e.clientY - prevPtr.y;
+  dragTotal += Math.abs(dx) + Math.abs(dy);
+  if (dragTotal > 8) { clearTimeout(longPressTimer); longPressTimer = null; }
+  targetRot.y += dx * 0.005;
+  targetRot.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRot.x + dy * 0.005));
+  prevPtr = { x: e.clientX, y: e.clientY };
+});
+
+renderer.domElement.addEventListener('mouseup', (e) => {
+  if (usingTouch) return;
+  clearTimeout(longPressTimer); longPressTimer = null;
+  isDragging = false;
+  if (draggingPin) { endDragPin(); return; }
+  if (started && dragTotal < 6 && !longPressed) {
+    const ll = getLatLonFromScreen(e.clientX, e.clientY);
+    if (ll) { addPin(ll.lat, ll.lon); document.getElementById('instructions').classList.add('hidden'); }
+  }
+});
+
+// Touch
+let lastPinchDist = 0;
+
+renderer.domElement.addEventListener('touchstart', (e) => {
+  e.preventDefault(); usingTouch = true;
+  if (e.touches.length === 1) {
+    isDragging = true; dragTotal = 0;
+    const t = e.touches[0];
+    prevPtr = { x: t.clientX, y: t.clientY };
+    pointerDownPos = { x: t.clientX, y: t.clientY };
+
+    const nearPin = findPinNearScreen(t.clientX, t.clientY);
+    longPressed = false;
+    if (nearPin) {
+      longPressTimer = setTimeout(() => { longPressed = true; startDragPin(nearPin); }, 400);
+    }
+  }
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    clearTimeout(longPressTimer); longPressTimer = null;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    if (lastPinchDist > 0) camera.position.z = Math.max(1.5, Math.min(6, camera.position.z + (lastPinchDist - dist) * 0.008));
+    lastPinchDist = dist;
+    return;
+  }
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0];
+
+  if (draggingPin) { moveDragPin(t.clientX, t.clientY); return; }
+
+  if (!isDragging) return;
+  const dx = t.clientX - prevPtr.x, dy = t.clientY - prevPtr.y;
+  dragTotal += Math.abs(dx) + Math.abs(dy);
+  if (dragTotal > 12) { clearTimeout(longPressTimer); longPressTimer = null; }
+  targetRot.y += dx * 0.005;
+  targetRot.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRot.x + dy * 0.005));
+  prevPtr = { x: t.clientX, y: t.clientY };
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  lastPinchDist = 0;
+  clearTimeout(longPressTimer); longPressTimer = null;
+  isDragging = false;
+  if (draggingPin) { endDragPin(); setTimeout(() => { usingTouch = false; }, 300); return; }
+  if (started && dragTotal < 12 && !longPressed && e.changedTouches.length === 1) {
+    const t = e.changedTouches[0];
+    const ll = getLatLonFromScreen(t.clientX, t.clientY);
+    if (ll) { addPin(ll.lat, ll.lon); document.getElementById('instructions').classList.add('hidden'); }
+  }
+  setTimeout(() => { usingTouch = false; }, 300);
+}, { passive: false });
+
+renderer.domElement.addEventListener('wheel', (e) => {
+  camera.position.z = Math.max(1.5, Math.min(6, camera.position.z + e.deltaY * 0.002));
+}, { passive: true });
+
+// ═══════════════════════════════════════
+// TOOLBAR
+// ═══════════════════════════════════════
+document.getElementById('btnReset').addEventListener('click', resetAllPins);
+document.getElementById('btnRandom').addEventListener('click', randomizePins);
+
+document.getElementById('btnMute').addEventListener('click', () => {
+  isMuted = !isMuted;
+  const btn = document.getElementById('btnMute');
+  if (isMuted) {
+    masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+    btn.textContent = 'Unmute';
+    btn.classList.add('muted');
+  } else {
+    masterGain.gain.setTargetAtTime(0.85, audioCtx.currentTime, 0.05);
+    btn.textContent = 'Mute';
+    btn.classList.remove('muted');
+  }
+});
+
+// ── DROPDOWN SYSTEM ──
+let activeMenu = null;
+
+function openMenu(btnId, menuId) {
+  const btn = document.getElementById(btnId);
+  const menu = document.getElementById(menuId);
+
+  if (activeMenu === menuId) {
+    menu.classList.remove('open');
+    activeMenu = null;
+    return;
+  }
+
+  // Close any open menu
+  document.querySelectorAll('.inst-menu').forEach(m => m.classList.remove('open'));
+
+  // Position below button, left-aligned
+  const rect = btn.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.max(8, rect.left) + 'px';
+  menu.style.right = 'auto';
+
+  menu.classList.add('open');
+  activeMenu = menuId;
+}
+
+function closeAllMenus() {
+  document.querySelectorAll('.inst-menu').forEach(m => m.classList.remove('open'));
+  activeMenu = null;
+}
+
+// Instrument
+document.getElementById('btnInst').addEventListener('click', (e) => {
+  e.stopPropagation(); openMenu('btnInst', 'instMenu');
+});
+document.querySelectorAll('.inst-option').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.stopPropagation(); changeInstrument(el.dataset.inst); closeAllMenus();
+  });
+});
+
+// Scale
+document.getElementById('btnScale').addEventListener('click', (e) => {
+  e.stopPropagation(); openMenu('btnScale', 'scaleMenu');
+});
+document.querySelectorAll('.scale-option').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.stopPropagation(); changeScale(el.dataset.scale); closeAllMenus();
+  });
+});
+
+// Arp
+document.getElementById('btnArp').addEventListener('click', (e) => {
+  e.stopPropagation(); openMenu('btnArp', 'arpMenu');
+});
+document.querySelectorAll('.arp-mode-option').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setArpMode(el.dataset.arp);
+    document.getElementById('btnArpRate').style.display = el.dataset.arp === 'off' ? 'none' : '';
+    closeAllMenus();
+  });
+});
+
+// Arp rate cycle
+document.getElementById('btnArpRate').addEventListener('click', (e) => {
+  e.stopPropagation(); cycleArpRate();
+});
+
+// Close menus on any tap outside
+document.addEventListener('click', closeAllMenus);
+renderer.domElement.addEventListener('click', closeAllMenus);
+
+// ═══════════════════════════════════════
+// ANIMATION
+// ═══════════════════════════════════════
+function animate() {
+  requestAnimationFrame(animate);
+  if (!isDragging && !draggingPin) targetRot.y += 0.0006;
+  earthGroup.rotation.x += (targetRot.x - earthGroup.rotation.x) * 0.05;
+  earthGroup.rotation.y += (targetRot.y - earthGroup.rotation.y) * 0.05;
+
+  const t = Date.now() / 1000;
+  pins.forEach(pin => {
+    const intensity = Math.min(pin.wind.speed / 10, 1);
+    const pulse = 1 + Math.sin(t * 2 + pin.id) * 0.25 * intensity;
+    pin.mesh.ring.scale.set(pulse, pulse, 1);
+    pin.mesh.ring.material.opacity = 0.25 + Math.sin(t * 1.5 + pin.id) * 0.2 * intensity;
+    pin.mesh.head.material.color.setHSL(0.08, 0.5, 0.4 + intensity * 0.3);
+  });
+
+  renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════
+// START
+// ═══════════════════════════════════════
+document.getElementById('startBtn').addEventListener('click', () => {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  initAudioShared(audioCtx);
+  started = true;
+  document.getElementById('startOverlay').classList.add('hidden');
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
